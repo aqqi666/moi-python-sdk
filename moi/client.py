@@ -1950,12 +1950,15 @@ class RawClient:
         headers["Accept"] = "text/event-stream"
         
         # Make request with stream=True
+        # For streaming requests, set timeout to None (0 in Go) to allow long-running streams
+        # The stream can still be cancelled via context or read timeout
+        # This prevents timeout errors while reading long-running streams
         response = self._http_client.request(
             method="POST",
             url=url,
             headers=headers,
             data=json_body,
-            timeout=self._timeout,
+            timeout=None,  # No timeout - allows reading long-running streams
             stream=True
         )
         
@@ -1973,7 +1976,11 @@ class RawClient:
             response.close()
             raise ValueError(f"unexpected content type: {content_type}, body: {body.decode('utf-8', errors='ignore')}")
         
-        return DataAnalysisStream(response, initial_buffer_size=call_opts.stream_buffer_size)
+        return DataAnalysisStream(
+            response,
+            initial_buffer_size=call_opts.stream_buffer_size,
+            read_timeout=call_opts.stream_read_timeout
+        )
 
     def cancel_analyze(self, request: Optional[Dict[str, Any]], *opts: CallOption) -> Any:
         """

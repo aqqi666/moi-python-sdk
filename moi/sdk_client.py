@@ -566,8 +566,7 @@ class SDKClient:
         with the following nodes:
         - RootNode: Reads files from the source volume
         - DocumentParseNode: Parses various document formats
-        - CleanerNodeV2: Cleans parsed documents
-        - ChunkNodeV2: Splits documents into chunks
+        - ChunkNode: Splits documents into chunks (with level-based split enabled)
         - EmbeddingNodeV2: Generates embeddings for document chunks
         - WriteNode: Writes processed results to the target volume
         
@@ -634,14 +633,19 @@ class SDKClient:
                         "init_parameters": {},
                     },
                     {
-                        "id": "CleanerNode_3",
-                        "type": "CleanerNodeV2",
-                        "init_parameters": {},
-                    },
-                    {
                         "id": "ChunkNode_4",
-                        "type": "ChunkNodeV2",
-                        "init_parameters": {},
+                        "type": "ChunkNode",
+                        "init_parameters": {
+                            "DocumentSplitter": {
+                                "enable_level_based_split": True,
+                            },
+                            "DocumentSplitter-ImageOCR": {
+                                "enable_level_based_split": True,
+                            },
+                            "DocumentSplitter-ImageCaption": {
+                                "enable_level_based_split": True,
+                            },
+                        },
                     },
                     {
                         "id": "EmbedNode_5",
@@ -661,10 +665,6 @@ class SDKClient:
                     },
                     {
                         "sender": "DocumentParseNode_2",
-                        "receiver": "CleanerNode_3",
-                    },
-                    {
-                        "sender": "CleanerNode_3",
                         "receiver": "ChunkNode_4",
                     },
                     {

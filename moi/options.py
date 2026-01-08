@@ -21,6 +21,7 @@ class CallOptions:
     query_params: Dict[str, Any] = field(default_factory=dict)
     request_id: Optional[str] = None
     stream_buffer_size: int = 0  # Initial buffer size for stream reader (in bytes), 0 means use default (4KB)
+    stream_read_timeout: float = 30.0  # Timeout between messages in streaming responses (in seconds), 0 means use default (30s)
 
 
 class ClientOption:
@@ -151,5 +152,34 @@ def with_stream_buffer_size(size: int) -> CallOption:
         def __call__(self, options: CallOptions) -> None:
             if size > 0:
                 options.stream_buffer_size = size
+    return _Option()
+
+
+def with_stream_read_timeout(timeout: float) -> CallOption:
+    """
+    Set the timeout between messages in streaming responses.
+    
+    This timeout is reset each time data is successfully read from the stream.
+    If no data is received within this timeout period, the read operation will fail.
+    This is different from the overall HTTP client timeout - it only applies to
+    the interval between messages, allowing long-running streams while detecting
+    actual connection failures.
+    
+    If not set, the default timeout is 30 seconds.
+    Set to 0 to use default timeout.
+    
+    Args:
+        timeout: Timeout in seconds between messages. Must be > 0 to take effect.
+    
+    Example:
+        stream = client.analyze_data_stream(
+            {"question": "..."},
+            with_stream_read_timeout(60.0)  # 60 seconds between messages
+        )
+    """
+    class _Option(CallOption):
+        def __call__(self, options: CallOptions) -> None:
+            if timeout > 0:
+                options.stream_read_timeout = timeout
     return _Option()
 

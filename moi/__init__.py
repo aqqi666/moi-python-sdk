@@ -8,6 +8,10 @@ from .client import RawClient
 from .errors import APIError, HTTPError, ErrBaseURLRequired, ErrAPIKeyRequired, ErrNilRequest
 from .sdk_client import SDKClient, TablePrivInfo, ExistedTableOption, ExistedTableOptions
 from .stream import FileStream, DataAnalysisStream
+from .options import (
+    with_stream_buffer_size,
+    with_stream_read_timeout,
+)
 from .models import (
     DataAnalysisRequest,
     DataAnalysisConfig,
@@ -43,6 +47,8 @@ __all__ = [
     "ErrNilRequest",
     "FileStream",
     "DataAnalysisStream",
+    "with_stream_buffer_size",
+    "with_stream_read_timeout",
     "DataAnalysisRequest",
     "DataAnalysisConfig",
     "DataAnalysisStreamEvent",

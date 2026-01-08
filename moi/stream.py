@@ -6,6 +6,8 @@ from typing import Iterator, Optional
 import json
 import os
 import requests
+import threading
+import io
 
 from .models import DataAnalysisStreamEvent
 
@@ -77,6 +79,75 @@ class FileStream:
         self.close()
 
 
+class TimeoutIterator:
+    """
+    Wraps an iterator and provides timeout control that resets on each successful iteration.
+    The timeout is applied to the interval between iterations, not the total iteration time.
+    """
+    
+    def __init__(self, iterator: Iterator[str], timeout: float):
+        """
+        Initialize a TimeoutIterator.
+        
+        Args:
+            iterator: The underlying iterator (e.g., iter_lines result)
+            timeout: Timeout in seconds between iterations. If <= 0, no timeout is applied.
+        """
+        self._iterator = iterator
+        self._timeout = timeout
+        self._lock = threading.Lock()
+    
+    def __iter__(self):
+        return self
+    
+    def __next__(self) -> str:
+        """
+        Get the next item from the iterator with timeout.
+        
+        The timeout is reset each time an item is successfully retrieved.
+        
+        Returns:
+            Next item from the iterator.
+        
+        Raises:
+            TimeoutError: If no item is received within the timeout period.
+            StopIteration: When the iterator is exhausted.
+        """
+        if self._timeout <= 0:
+            # No timeout, iterate directly
+            return next(self._iterator)
+        
+        # Serialize iterations to ensure timeout is properly reset
+        with self._lock:
+            # Use a queue to communicate between threads
+            result_queue: list[Optional[tuple[Optional[str], Optional[Exception]]]] = []
+            
+            def iterate_operation():
+                try:
+                    item = next(self._iterator)
+                    result_queue.append((item, None))
+                except StopIteration:
+                    result_queue.append((None, StopIteration()))
+                except Exception as e:
+                    result_queue.append((None, e))
+            
+            # Start iteration operation in a separate thread
+            iterate_thread = threading.Thread(target=iterate_operation, daemon=True)
+            iterate_thread.start()
+            iterate_thread.join(timeout=self._timeout)
+            
+            if result_queue:
+                item, error = result_queue[0]
+                if error:
+                    # Re-raise StopIteration or other exceptions
+                    raise error
+                # Iteration completed successfully - timeout is effectively reset for the next iteration
+                return item
+            else:
+                # Timeout - no item received within the timeout period
+                raise TimeoutError(f"read timeout: no data received within {self._timeout} seconds")
+
+
 class DataAnalysisStream:
     """
     Wraps a streaming HTTP response for data analysis API.
@@ -111,7 +182,7 @@ class DataAnalysisStream:
             stream.close()
     """
 
-    def __init__(self, response: requests.Response, initial_buffer_size: int = 0):
+    def __init__(self, response: requests.Response, initial_buffer_size: int = 0, read_timeout: float = 30.0):
         """
         Initialize a DataAnalysisStream.
         
@@ -123,13 +194,24 @@ class DataAnalysisStream:
                                 arbitrary length, so this option only sets the initial buffer
                                 size for better performance. This is provided for API consistency
                                 with Go SDK.
+            read_timeout: Timeout in seconds between messages in streaming responses.
+                         Default is 30.0 seconds. The timeout is reset each time data is
+                         successfully read from the stream. If no data is received within this
+                         timeout period, the read operation will fail. Set to 0 to disable
+                         timeout (not recommended).
         """
         self._response = response
-        self.body = response.raw
+        self._read_timeout = read_timeout if read_timeout > 0 else 30.0  # Default 30 seconds
         self.headers = response.headers
         self.status_code = response.status_code
         self._scanner = None
         self._initial_buffer_size = initial_buffer_size
+        self._wrapped_body = None
+
+    @property
+    def body(self):
+        """Get the response body."""
+        return self._response.raw
 
     def close(self) -> None:
         """Close the underlying HTTP response."""
@@ -163,7 +245,13 @@ class DataAnalysisStream:
             else:
                 # Default initial buffer size: 4KB (4096 bytes)
                 chunk_size = 4096
-            self._scanner = iter(self._response.iter_lines(decode_unicode=True, chunk_size=chunk_size))
+            base_iterator = self._response.iter_lines(decode_unicode=True, chunk_size=chunk_size)
+            # Wrap iterator with timeout if timeout is configured
+            # The timeout is reset each time data is successfully read
+            if self._read_timeout > 0:
+                self._scanner = TimeoutIterator(iter(base_iterator), self._read_timeout)
+            else:
+                self._scanner = iter(base_iterator)
 
         event = DataAnalysisStreamEvent()
         data_lines = []
@@ -205,6 +293,10 @@ class DataAnalysisStream:
                 elif line.startswith("event: "):
                     event_type = line[7:]  # Remove "event: " prefix
                 # Ignore other SSE fields (id, retry, etc.)
+        
+        except TimeoutError:
+            # Timeout error - check if it contains "read timeout"
+            raise
 
             # Handle last event if any
             if len(data_lines) > 0:
