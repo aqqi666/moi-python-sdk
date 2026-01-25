@@ -3,11 +3,62 @@
 import json
 import io
 import pytest
-from moi import RawClient, ErrNilRequest
+from dataclasses import asdict
+
+from moi import RawClient, ErrNilRequest, ContextConfig, DataAnalysisConfig
 from moi.options import with_stream_buffer_size
 from moi.stream import DataAnalysisStream
 from tests.test_helpers import get_test_client
 import requests
+
+
+class TestContextConfig:
+    """Test ContextConfig and DataAnalysisConfig with context_config."""
+
+    def test_context_config_json_serialization(self):
+        """Test ContextConfig JSON serialization and deserialization."""
+        config = ContextConfig(max_knowledge_items=30, max_knowledge_value_length=150)
+        d = asdict(config)
+        json_data = json.dumps(d)
+        result = json.loads(json_data)
+        assert result["max_knowledge_items"] == 30
+        assert result["max_knowledge_value_length"] == 150
+
+        # Deserialize back
+        c = ContextConfig(**result)
+        assert c.max_knowledge_items == 30
+        assert c.max_knowledge_value_length == 150
+
+    def test_context_config_default_values(self):
+        """Test ContextConfig with zero/default values."""
+        config = ContextConfig()
+        d = asdict(config)
+        json_data = json.dumps(d)
+        result = json.loads(json_data)
+        assert result["max_knowledge_items"] == 0
+        assert result["max_knowledge_value_length"] == 0
+
+    def test_data_analysis_config_with_context_config(self):
+        """Test DataAnalysisConfig with context_config."""
+        config = DataAnalysisConfig(
+            data_category="admin",
+            context_config=ContextConfig(max_knowledge_items=25, max_knowledge_value_length=120),
+        )
+        d = asdict(config)
+        json_data = json.dumps(d, default=str)
+        result = json.loads(json_data)
+        assert result["data_category"] == "admin"
+        ctx = result["context_config"]
+        assert ctx is not None
+        assert ctx["max_knowledge_items"] == 25
+        assert ctx["max_knowledge_value_length"] == 120
+
+    def test_data_analysis_config_without_context_config(self):
+        """Test DataAnalysisConfig without context_config (field None)."""
+        config = DataAnalysisConfig(data_category="admin", context_config=None)
+        d = asdict(config)
+        assert "context_config" in d
+        assert d["context_config"] is None
 
 
 class TestAnalyzeDataStream:

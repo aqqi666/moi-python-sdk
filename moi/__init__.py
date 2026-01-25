@@ -15,6 +15,7 @@ from .options import (
 from .models import (
     DataAnalysisRequest,
     DataAnalysisConfig,
+    ContextConfig,
     DataAnalysisStreamEvent,
     InitEventData,
     DataSource,
@@ -51,6 +52,7 @@ __all__ = [
     "with_stream_read_timeout",
     "DataAnalysisRequest",
     "DataAnalysisConfig",
+    "ContextConfig",
     "DataAnalysisStreamEvent",
     "InitEventData",
     "DataSource",

@@ -543,6 +543,13 @@ class DataSource:
 
 
 @dataclass
+class ContextConfig:
+    """Context configuration."""
+    max_knowledge_items: int = 0  # Maximum number of business rules returned by list_knowledge (default: 20)
+    max_knowledge_value_length: int = 0  # Maximum character length of each rule value in list_knowledge (default: 100)
+
+
+@dataclass
 class DataAnalysisConfig:
     """Data analysis configuration."""
     mcp_server_url: Optional[str] = None  # MCP server URL
@@ -551,6 +558,7 @@ class DataAnalysisConfig:
     filter_conditions: Optional[FilterConditions] = None
     data_source: Optional[DataSource] = None
     data_scope: Optional[DataScope] = None
+    context_config: Optional[ContextConfig] = None  # Context configuration
 
 
 @dataclass

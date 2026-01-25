@@ -734,32 +734,43 @@ class SDKClient:
         source_file_id: str,
         poll_interval: float = 2.0,
         timeout: float = 60.0,
+        wait_for_statuses: Optional[List[int]] = None,
         *opts: CallOption,
     ) -> Dict[str, Any]:
         """
-        Poll for a workflow job until it is found or the timeout expires.
+        Poll for a workflow job until it reaches one of the specified statuses or the timeout expires.
         
         This method continuously queries for a workflow job matching the given workflow ID and source file ID
         until either:
-        - The job is found (returns the job immediately)
+        - The job is found and its status matches one of the wait_for_statuses (returns the job immediately)
         - The timeout expires (raises an error)
+        
+        If wait_for_statuses is None or empty, returns the job as soon as it is found (any status).
         
         Args:
             workflow_id: The workflow ID (required)
             source_file_id: The source file ID (required)
             poll_interval: The interval between polling attempts in seconds (default: 2.0)
             timeout: The maximum time to wait in seconds (default: 60.0)
+            wait_for_statuses: List of status codes to wait for. Status codes: 1=running, 2=completed, 3=failed.
+                              If None or empty, returns job immediately when found (any status).
             *opts: Optional call configuration options
         
         Returns:
             The matching workflow job dict
         
         Example:
-            import time
-            job = sdk.wait_for_workflow_job("workflow-123", "file-456", poll_interval=2.0, timeout=30.0)
+            from moi.models import WorkflowJobStatus
+            # Wait for job to complete or fail
+            job = sdk.wait_for_workflow_job(
+                "workflow-123", "file-456",
+                poll_interval=2.0, timeout=30.0,
+                wait_for_statuses=[WorkflowJobStatus.COMPLETED, WorkflowJobStatus.FAILED]
+            )
             print(f"Job found: {job['job_id']}, Status: {job['status']}")
         """
         import time
+        from .models import WorkflowJobStatus
         
         if not workflow_id or not workflow_id.strip():
             raise ValueError("workflow_id is required")
@@ -772,22 +783,32 @@ class SDKClient:
         if timeout <= 0:
             timeout = 60.0
         
+        # Helper function to check if status is in the wait list
+        def status_matches(status: int) -> bool:
+            if not wait_for_statuses or len(wait_for_statuses) == 0:
+                return True  # If no statuses specified, accept any status
+            return status in wait_for_statuses
+        
         start_time = time.time()
         
         # Try once immediately
         try:
             job = self.get_workflow_job(workflow_id, source_file_id, *opts)
-            if job:
+            if job and status_matches(job.get("status", 0)):
                 return job
         except ValueError:
             pass  # Job not found yet, continue polling
         
-        # Poll until found or timeout expires
+        # Poll until found with matching status or timeout expires
         while True:
             elapsed = time.time() - start_time
             if elapsed >= timeout:
+                status_desc = "any status"
+                if wait_for_statuses and len(wait_for_statuses) > 0:
+                    status_strs = [WorkflowJobStatus.to_string(s) for s in wait_for_statuses]
+                    status_desc = ", ".join(status_strs)
                 raise TimeoutError(
-                    f"workflow job not found within timeout ({timeout}s) "
+                    f"workflow job did not reach status [{status_desc}] within timeout ({timeout}s) "
                     f"for workflow_id={workflow_id}, source_file_id={source_file_id}"
                 )
             
@@ -795,7 +816,7 @@ class SDKClient:
             
             try:
                 job = self.get_workflow_job(workflow_id, source_file_id, *opts)
-                if job:
+                if job and status_matches(job.get("status", 0)):
                     return job
             except ValueError:
                 pass  # Job not found yet, continue polling
