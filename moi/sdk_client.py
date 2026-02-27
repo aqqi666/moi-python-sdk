@@ -363,9 +363,14 @@ class SDKClient:
                 
                 # Extract filename from path
                 file_name = path.name
-                
+
+                # If meta provides a filename, use it for the upload item
+                upload_file_name = file_name
+                if metas and i < len(metas) and metas[i].get("filename", "").strip():
+                    upload_file_name = metas[i]["filename"]
+
                 # Build file upload item
-                file_items.append((file_handle, file_name))
+                file_items.append((file_handle, upload_file_name))
                 
                 # Build meta - use provided meta or auto-generate from file path
                 if metas and i < len(metas) and metas[i].get("filename"):
