@@ -60,6 +60,26 @@ class TestContextConfig:
         assert "context_config" in d
         assert d["context_config"] is None
 
+    def test_data_analysis_config_recommended_questions_defaults(self):
+        """Test DataAnalysisConfig recommended questions default values."""
+        config = DataAnalysisConfig()
+        d = asdict(config)
+        assert d["enable_recommended_questions"] is True
+        assert d["recommended_questions_timeout_seconds"] == 2.0
+
+    def test_data_analysis_config_recommended_questions_custom(self):
+        """Test DataAnalysisConfig with custom recommended questions settings."""
+        config = DataAnalysisConfig(
+            data_category="admin",
+            enable_recommended_questions=False,
+            recommended_questions_timeout_seconds=5.0,
+        )
+        d = asdict(config)
+        json_data = json.dumps(d, default=str)
+        result = json.loads(json_data)
+        assert result["enable_recommended_questions"] is False
+        assert result["recommended_questions_timeout_seconds"] == 5.0
+
 
 class TestAnalyzeDataStream:
     """Test Data Analysis Streaming API."""
