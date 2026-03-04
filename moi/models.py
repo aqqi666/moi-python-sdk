@@ -559,6 +559,9 @@ class DataAnalysisConfig:
     data_source: Optional[DataSource] = None
     data_scope: Optional[DataScope] = None
     context_config: Optional[ContextConfig] = None  # Context configuration
+    # 推荐问题：是否启用、超时秒数（per-request）
+    enable_recommended_questions: bool = True  # 是否启用推荐问题
+    recommended_questions_timeout_seconds: float = 2.0  # 推荐问题生成超时秒数
 
 
 @dataclass
