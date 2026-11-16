@@ -21,6 +21,8 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
+      - name: Injected failure for release gate validation
+        run: exit 1
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
